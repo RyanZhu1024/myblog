@@ -53,7 +53,7 @@ Simple Bully [election](https://en.wikipedia.org/wiki/Bully_algorithm) algorithm
 
 ### Scalability
 
-When a new data node is added to the cluster, the current primary node's infomation will be given. The new node will synchronize with the primary node while blocking requests from web nodes to ensure the data consistency. I assume it is acceptable to have the system unavailable during this process and the primary node won't fail while synchronizing. 
+When a new data node is added to the cluster, the current primary node's infomation will be given. The new node will synchronize with the primary node while blocking requests from web nodes to the primary to ensure the data consistency. It is acceptable to have the system unavailable during this process and it is assumed the primary node won't fail while synchronizing. 
 
 ## Implementation
 
@@ -61,21 +61,39 @@ When a new data node is added to the cluster, the current primary node's infomat
 
 A 2 phase distributed transaction method is implemented. When a write request arrives at the primary node, the primary node will ask for votes from all slaves. When all slaves vote for commit, a commit message will be sent to all slaves and the data will be written to the storage. If anyone of the slaves votes for abort, the operation will be aborted. 
 
+The primary node will try 3 times for voting. If any of the slaves failed — meaning crashed or timeout — during this process, the primary will set the particular slave status to offline, which will be ignored during the next attemp of iteration. Once reaching a consensus of commit or abort after iteration, the transaction will complete at last.
+
 A strict 2 phase locking machenism is implemented on each single data server to ensure a write operation to have the access to the paricular storage.
 
 ### Election
 
-### Semaphore
+1. P broadcasts an election message (inquiry) to all other processes with higher process IDs, expecting an "I am alive" response from them if they are alive.
+2. If P hears from no process with a higher process ID, then it wins the election and broadcasts victory.
+3. If P hears from a process with a higher ID, P waits a certain amount of time for any process with a higher ID to broadcast itself as the leader. If it does not receive this message in time, it re-broadcasts the election message.
+4. If P gets an election message (inquiry) from another process with a lower ID it sends an "I am alive" message back and starts new elections.
+5. If P receives a victory message from a process with a lower ID number, it immediately initiates a new election
 
-With semaphore provided by JDK, isolation can be guaranteed between a write operation and a sync operation from a newly added node. There are 2 types semaphore created on this purpose. 
+#### Election State Machine
 
-To preceed a write operation, a thread has to have all permits from the sync semaphore, once it gets it, it will try to acquire a write semaphore. The sync semaphore will be released either right after the write semaphore being acquired or it failed to acquire the write semaphore, and vice versa for the sync operation.
+### Syncing Data to Newly Added Data Node
 
-There are other types of semaphore being created for the purpose of isolation between different operations, which are omitted here.
+One data node can be added to the cluster at a time. The primary node will be given to the new node.
 
-### CountdownLatch
+Once a node is added to the cluster, it will send a *begin sync* message to the primary node. The primary node will lock the data store to prevent all write operations and reply an OK. Read operations are still allowed during this process. 
 
-To improve the performace of the system, the communication between nodes will be executed concurrently. For example, when primary initiates a voting process for a transaction or a slave initiates a election. A CountdownLatch is used to ensure the next step being reached after all threads complete their jobs.
+Once the node received OK message from the primary, it will send *give me all data* message. The primary will start flushing all data store to the node. Once the node completes receiving all data, it will send a *end sync* message to the primary. The primary will contact other slaves to tell them the new node information, unlock the data store and get back to normal state. 
+
+Other slaves can crash for timeout during the last step, but it can be ignored. It is the primary node's responsibility to manage the aliveness of all slaves. When there is an election started, all candidates will update their running data nodes group when they receive a *Are you alive message*. Thus, the next primary node will always know the group of nodes that are alive.
+
+#### Sync State Machine
+
+### Testing
+
+
+
+
+
+
 
 
 
