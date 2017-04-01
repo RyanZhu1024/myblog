@@ -23,9 +23,9 @@ The project is a simplified Slack realtime messaging system based on HTTP protoc
 
 All APIs are completed before implementing the strong consistency model.
 
-## Architecture 
+## Architecture
 
-There are multiple web servers running as coordinators to handle requests from any client and forward those requests to any of the data servers in the backend. 
+There are multiple web servers running as coordinators to handle requests from any client and forward those requests to any of the data servers in the backend.
 
 There are multiple data servers running in a master-slave architecture to process all requests coming web servers. The master will be the one to accept all W/R operations and synchronize with other slaves. 	
 
@@ -53,13 +53,13 @@ Simple Bully [election](https://en.wikipedia.org/wiki/Bully_algorithm) algorithm
 
 ### Scalability
 
-When a new data node is added to the cluster, the current primary node's infomation will be given. The new node will synchronize with the primary node while blocking requests from web nodes to the primary to ensure the data consistency. It is acceptable to have the system unavailable during this process and it is assumed the primary node won't fail while synchronizing. 
+When a new data node is added to the cluster, the current primary node's infomation will be given. The new node will synchronize with the primary node while blocking requests from web nodes to the primary to ensure the data consistency. It is acceptable to have the system unavailable during this process and it is assumed the primary node won't fail while synchronizing.
 
 ## Implementation
 
 ### Transaction
 
-A 2 phase distributed transaction method is implemented. When a write request arrives at the primary node, the primary node will ask for votes from all slaves. When all slaves vote for commit, a commit message will be sent to all slaves and the data will be written to the storage. If anyone of the slaves votes for abort, the operation will be aborted. 
+A 2 phase distributed transaction method is implemented. When a write request arrives at the primary node, the primary node will ask for votes from all slaves. When all slaves vote for commit, a commit message will be sent to all slaves and the data will be written to the storage. If anyone of the slaves votes for abort, the operation will be aborted.
 
 The primary node will try 3 times for voting. If any of the slaves failed — meaning crashed or timeout — during this process, the primary will set the particular slave status to offline, which will be ignored during the next attemp of iteration. Once reaching a consensus of commit or abort after iteration, the transaction will complete at last.
 
@@ -75,27 +75,19 @@ A strict 2 phase locking machenism is implemented on each single data server to 
 
 #### Election State Machine
 
+![Election State Machine](https://xmindshare.s3.amazonaws.com/preview/sbzk-LYDYSft-95439.png)
+
 ### Syncing Data to Newly Added Data Node
 
 One data node can be added to the cluster at a time. The primary node will be given to the new node.
 
-Once a node is added to the cluster, it will send a *begin sync* message to the primary node. The primary node will lock the data store to prevent all write operations and reply an OK. Read operations are still allowed during this process. 
+Once a node is added to the cluster, it will send a *begin sync* message to the primary node. The primary node will lock the data store to prevent all write operations and reply an OK. Read operations are still allowed during this process.
 
-Once the node received OK message from the primary, it will send *give me all data* message. The primary will start flushing all data store to the node. Once the node completes receiving all data, it will send a *end sync* message to the primary. The primary will contact other slaves to tell them the new node information, unlock the data store and get back to normal state. 
+Once the node received OK message from the primary, it will send *give me all data* message. The primary will start flushing all data store to the node. Once the node completes receiving all data, it will send a *end sync* message to the primary. The primary will contact other slaves to tell them the new node information, unlock the data store and get back to normal state.
 
 Other slaves can crash for timeout during the last step, but it can be ignored. It is the primary node's responsibility to manage the aliveness of all slaves. When there is an election started, all candidates will update their running data nodes group when they receive a *Are you alive message*. Thus, the next primary node will always know the group of nodes that are alive.
 
 #### Sync State Machine
 
-## Testing
 
-
-
-
-
-
-
-
-
-
-
+## ![sync state machine](sync state machine.png)Testing
